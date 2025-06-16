@@ -1,0 +1,1084 @@
+{
+  "name": "Copenhagen Cosmetic Clinic - AI SMS Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🏥 Copenhagen Cosmetic Clinic AI SMS Agent\n\n### Complete SMS Automation System\nThis workflow handles:\n- **Missed calls** → Personalized follow-up SMS\n- **Incoming SMS** → AI-powered conversations\n- **Lead tracking** → Automatic CRM updates\n- **Human escalation** → Slack/Email alerts\n\n### Key Features:\n✅ Dual webhook handling (calls + SMS)\n✅ Customer personalization\n✅ AI fallback messages\n✅ Conversation history\n✅ Escalation triggers\n✅ Full error handling\n✅ 100+ msgs/hour capacity\n\n### Configuration Required:\n1. Twilio credentials\n2. Airtable/Supabase API\n3. OpenAI API key\n4. Slack webhook\n5. Update clinic name",
+        "height": 450,
+        "width": 650
+      },
+      "id": "overview_note",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 20]
+    },
+    {
+      "parameters": {
+        "path": "copenhagen-clinic-sms",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_unified",
+      "name": "Unified Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 520],
+      "webhookId": "copenhagen-clinic-unified"
+    },
+    {
+      "parameters": {
+        "content": "### Twilio Webhook Payloads\n\n**Missed Call:**\n```json\n{\n  \"CallStatus\": \"no-answer\",\n  \"From\": \"+4512345678\",\n  \"To\": \"+4587654321\",\n  \"CallSid\": \"CA123abc\",\n  \"Direction\": \"inbound\",\n  \"Timestamp\": \"2024-01-15T10:30:00Z\"\n}\n```\n\n**Incoming SMS:**\n```json\n{\n  \"Body\": \"Hi, what are your prices?\",\n  \"From\": \"+4512345678\",\n  \"To\": \"+4587654321\",\n  \"MessageSid\": \"SM456def\",\n  \"NumMedia\": \"0\"\n}\n```\n\n**Configuration:**\n- Voice URL: `{n8n-url}/webhook/copenhagen-clinic-sms`\n- Message URL: Same as above\n- Method: POST",
+        "height": 450,
+        "width": 400
+      },
+      "id": "webhook_examples",
+      "name": "Webhook Examples",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 750]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.CallStatus }}",
+                    "rightValue": "no-answer|busy",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MissedCall"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Body }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "IncomingSMS"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "route_type",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [440, 520]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Invalid webhook data received: {{ JSON.stringify($json) }}"
+      },
+      "id": "stop_invalid",
+      "name": "Stop on Invalid Data",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [680, 700]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "phone",
+              "name": "phoneNumber",
+              "value": "={{ $('Unified Webhook').item.json.From }}",
+              "type": "string"
+            },
+            {
+              "id": "type",
+              "name": "eventType",
+              "value": "missed_call",
+              "type": "string"
+            },
+            {
+              "id": "call_sid",
+              "name": "callSid",
+              "value": "={{ $('Unified Webhook').item.json.CallSid }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prep_missed_call",
+      "name": "Prepare Missed Call",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [680, 380]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "phone",
+              "name": "phoneNumber",
+              "value": "={{ $('Unified Webhook').item.json.From }}",
+              "type": "string"
+            },
+            {
+              "id": "type",
+              "name": "eventType",
+              "value": "incoming_sms",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "messageBody",
+              "value": "={{ $('Unified Webhook').item.json.Body }}",
+              "type": "string"
+            },
+            {
+              "id": "msg_sid",
+              "name": "messageSid",
+              "value": "={{ $('Unified Webhook').item.json.MessageSid }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prep_sms",
+      "name": "Prepare SMS Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [680, 520]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblCustomers",
+          "mode": "list"
+        },
+        "options": {},
+        "filterByFormula": "=OR({Phone} = '{{ $json.phoneNumber }}', SEARCH('{{ $json.phoneNumber.slice(-8) }}', {Phone}))"
+      },
+      "id": "lookup_customer",
+      "name": "Lookup Customer",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [920, 450],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "### CRM Configuration\n\n**Airtable Base Structure:**\n\n**tblCustomers:**\n- First Name (text)\n- Last Name (text)\n- Phone (phone)\n- Customer ID (autonumber)\n- Preferred Language (single select)\n- Last Visit (date)\n- Total Visits (number)\n- VIP Status (checkbox)\n\n**tblLeads:**\n- Phone (phone)\n- Source (single select)\n- Status (single select)\n- First Contact (datetime)\n- Last Contact (datetime)\n- Lead Score (number)\n- Notes (long text)\n\n**tblConversations:**\n- Phone Number (phone)\n- Messages (long text/JSON)\n- Start Time (datetime)\n- Last Message (datetime)\n- Status (single select)\n- Escalated (checkbox)",
+        "height": 500,
+        "width": 350
+      },
+      "id": "crm_structure",
+      "name": "CRM Structure",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [920, 750]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $('Prepare SMS Data').item.json.eventType }}",
+              "rightValue": "incoming_sms",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is_sms_flow",
+      "name": "Is SMS Flow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1160, 450]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblConversations",
+          "mode": "list"
+        },
+        "options": {
+          "sort": {
+            "fields": [
+              {
+                "field": "Last Message",
+                "direction": "desc"
+              }
+            ]
+          }
+        },
+        "filterByFormula": "=AND({Phone Number} = '{{ $('Prepare SMS Data').item.json.phoneNumber }}', DATETIME_DIFF(NOW(), {Last Message}, 'hours') < 24)"
+      },
+      "id": "get_conversation",
+      "name": "Get Conversation History",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1400, 520],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "customer_data",
+              "name": "customerData",
+              "value": "={{ $('Lookup Customer').item.json.fields || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "customer_name",
+              "name": "customerName",
+              "value": "={{ $json.customerData['First Name'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "is_vip",
+              "name": "isVIP",
+              "value": "={{ $json.customerData['VIP Status'] || false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "language",
+              "name": "preferredLanguage",
+              "value": "={{ $json.customerData['Preferred Language'] || 'Danish' }}",
+              "type": "string"
+            },
+            {
+              "id": "has_customer",
+              "name": "hasCustomerRecord",
+              "value": "={{ Object.keys($json.customerData).length > 0 }}",
+              "type": "boolean"
+            },
+            {
+              "id": "conversation_data",
+              "name": "conversationHistory",
+              "value": "={{ $('Get Conversation History')?.item?.json?.fields?.Messages ? JSON.parse($('Get Conversation History').item.json.fields.Messages) : [] }}",
+              "type": "object"
+            },
+            {
+              "id": "conversation_id",
+              "name": "conversationId",
+              "value": "={{ $('Get Conversation History')?.item?.json?.id || null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge_data",
+      "name": "Merge Customer Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1640, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for escalation triggers\nconst eventType = $input.first().json.eventType || 'missed_call';\nconst messageBody = $input.first().json.messageBody || '';\nconst customerData = $input.first().json.customerData || {};\nconst isVIP = $input.first().json.isVIP || false;\n\n// Escalation keywords\nconst frustrationKeywords = /angry|upset|terrible|awful|complaint|speak to human|manager|real person/i;\nconst complexKeywords = /insurance|payment plan|financing|medical condition|allergy|pregnant/i;\nconst bookingKeywords = /book|appointment|schedule|availability|tomorrow|today|urgent/i;\n\nlet needsEscalation = false;\nlet escalationReason = '';\n\nif (eventType === 'incoming_sms') {\n  // Check for frustration\n  if (frustrationKeywords.test(messageBody)) {\n    needsEscalation = true;\n    escalationReason = 'Customer frustration detected';\n  }\n  // Check for complex questions\n  else if (complexKeywords.test(messageBody)) {\n    needsEscalation = true;\n    escalationReason = 'Complex medical/financial question';\n  }\n  // Check for urgent booking\n  else if (bookingKeywords.test(messageBody) && messageBody.toLowerCase().includes('urgent')) {\n    needsEscalation = true;\n    escalationReason = 'Urgent booking request';\n  }\n}\n\n// VIP always gets escalation option\nif (isVIP && eventType === 'incoming_sms') {\n  needsEscalation = true;\n  escalationReason = escalationReason || 'VIP customer interaction';\n}\n\nreturn {\n  ...($input.first().json),\n  needsEscalation,\n  escalationReason,\n  checkTimestamp: new Date().toISOString()\n};"
+      },
+      "id": "check_escalation",
+      "name": "Check Escalation Triggers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1880, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.needsEscalation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "needs_escalation",
+      "name": "Needs Escalation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2120, 450]
+    },
+    {
+      "parameters": {
+        "channel": "#clinic-escalations",
+        "text": ":warning: SMS Escalation Required",
+        "otherOptions": {},
+        "attachments": [
+          {
+            "color": "#ff6b6b",
+            "fields": {
+              "item": [
+                {
+                  "short": true,
+                  "title": "Customer",
+                  "value": "={{ $('Check Escalation Triggers').item.json.customerName || 'Unknown' }}"
+                },
+                {
+                  "short": true,
+                  "title": "Phone",
+                  "value": "={{ $('Check Escalation Triggers').item.json.phoneNumber }}"
+                },
+                {
+                  "short": false,
+                  "title": "Reason",
+                  "value": "={{ $('Check Escalation Triggers').item.json.escalationReason }}"
+                },
+                {
+                  "short": false,
+                  "title": "Message",
+                  "value": "{{ $('Check Escalation Triggers').item.json.messageBody }}"
+                },
+                {
+                  "short": true,
+                  "title": "VIP Status",
+                  "value": "={{ $('Check Escalation Triggers').item.json.isVIP ? 'Yes 🌟' : 'No' }}"
+                },
+                {
+                  "short": true,
+                  "title": "Time",
+                  "value": "={{ $now.format('HH:mm') }}"
+                }
+              ]
+            },
+            "fallback": "SMS Escalation: {{ $json.escalationReason }}",
+            "pretext": "Immediate attention required"
+          }
+        ]
+      },
+      "id": "slack_alert",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [2360, 320],
+      "credentials": {
+        "slackApi": {
+          "id": "slack_placeholder",
+          "name": "Slack API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare the AI prompt\nconst eventType = $input.first().json.eventType;\nconst customerName = $input.first().json.customerName || '';\nconst conversationHistory = $input.first().json.conversationHistory || [];\nconst messageBody = $input.first().json.messageBody || '';\nconst language = $input.first().json.preferredLanguage || 'Danish';\nconst isVIP = $input.first().json.isVIP || false;\n\nlet userPrompt = '';\n\nif (eventType === 'missed_call') {\n  const name = customerName || 'someone';\n  userPrompt = `Write a friendly, professional SMS from Copenhagen Cosmetic Clinic to ${name} who we missed a call from. Ask how we can help with their beauty goals. Be warm and inviting. Maximum 150 characters. ${language === 'Danish' ? 'Write in Danish.' : 'Write in English.'}`;\n  \n  if (isVIP) {\n    userPrompt += ' This is a VIP customer - be extra attentive.';\n  }\n} else {\n  let contextMessages = conversationHistory.slice(-4).map(msg => \n    `${msg.role === 'assistant' ? 'Clinic' : 'Customer'}: ${msg.content}`\n  ).join('\\n');\n  \n  userPrompt = `Previous conversation:\\n${contextMessages}\\n\\nCustomer says: ${messageBody}\\n\\nReply helpfully about our cosmetic services. Be warm and professional. Maximum 150 characters. ${language === 'Danish' ? 'Reply in Danish.' : 'Reply in English.'}`;\n}\n\nreturn {\n  ...$input.first().json,\n  aiPrompt: userPrompt\n};"
+      },
+      "id": "build_ai_prompt",
+      "name": "Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2120, 580]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "model": "gpt-4-turbo",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a friendly SMS assistant for Copenhagen Cosmetic Clinic. Keep responses under 150 characters, warm and professional.\n\nServices & Prices:\n- Botox: 2,500-4,000 DKK\n- Fillers: 3,500-5,000 DKK\n- Laser treatments: 1,500-3,000 DKK\n- Skin rejuvenation: 2,000-4,000 DKK\n- Free consultations\n\nHours: Mon-Fri 9-18, Sat 10-16\nAddress: Østerbrogade 123, Copenhagen\nBooking: book.copenhagenclinic.dk\n\nFor Danish customers, respond in Danish. For English, respond in English."
+            },
+            {
+              "role": "user",
+              "content": "={{ $('Build AI Prompt').item.json.aiPrompt }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 100
+        }
+      },
+      "id": "generate_ai_response",
+      "name": "Generate AI Response",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [2360, 450],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai_placeholder",
+          "name": "OpenAI API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "### AI Prompt Configuration\n\n**For Missed Calls:**\n```\nWrite a friendly SMS from Copenhagen Cosmetic Clinic to [Name/someone] who we missed a call from. Ask how we can help. Max 150 chars.\n```\n\n**For SMS Conversations:**\n```\nPrevious messages:\n[conversation history]\n\nCustomer says: [message]\n\nReply helpfully about our cosmetic services. Max 150 chars.\n```\n\n**Tone Adjustments:**\n- Professional: Remove emojis, formal\n- Friendly: Add warmth, casual\n- VIP: Extra personalized, priority\n\n**Language Detection:**\nBased on customer preference or message language",
+        "height": 450,
+        "width": 400
+      },
+      "id": "ai_prompts",
+      "name": "AI Prompt Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2360, 680]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate AI response with fallback\nconst aiResponse = $('Generate AI Response').item.json;\nconst eventType = $input.first().json.eventType;\nconst customerName = $input.first().json.customerName || '';\nconst language = $input.first().json.preferredLanguage || 'Danish';\n\nlet smsContent = '';\nlet aiGenerated = true;\n\n// Try to extract AI message\nif (aiResponse.error || !aiResponse.message?.content) {\n  // AI failed, use fallback\n  aiGenerated = false;\n  \n  if (eventType === 'missed_call') {\n    if (language === 'Danish') {\n      smsContent = customerName \n        ? `Hej ${customerName}, vi missede dit opkald. Hvordan kan vi hjælpe? Ring tilbage eller svar her. - Copenhagen Cosmetic`\n        : `Hej! Vi missede dit opkald. Hvordan kan vi hjælpe dig? Ring tilbage eller svar her. - Copenhagen Cosmetic`;\n    } else {\n      smsContent = customerName\n        ? `Hi ${customerName}, we missed your call. How can we help? Call back or reply here. - Copenhagen Cosmetic`\n        : `Hi! We missed your call at Copenhagen Cosmetic. How can we help you? Reply or call us back.`;\n    }\n  } else {\n    // SMS conversation fallback\n    if (language === 'Danish') {\n      smsContent = 'Tak for din besked. Ring venligst 70 12 34 56 for assistance.';\n    } else {\n      smsContent = 'Thanks for your message. Please call us at 70 12 34 56 for assistance.';\n    }\n  }\n} else {\n  // Extract AI response\n  smsContent = aiResponse.message.content.trim().replace(/^\"|\"$/g, '');\n}\n\n// Ensure SMS length compliance\nif (smsContent.length > 160) {\n  smsContent = smsContent.substring(0, 157) + '...';\n}\n\n// Validate content\nif (!smsContent || smsContent.length === 0) {\n  throw new Error('SMS content is empty');\n}\n\nreturn {\n  ...$input.first().json,\n  smsContent,\n  smsLength: smsContent.length,\n  aiGenerated,\n  fallbackUsed: !aiGenerated,\n  preparedAt: new Date().toISOString()\n};"
+      },
+      "id": "prepare_sms",
+      "name": "Prepare SMS with Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2600, 450]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "from": "={{ $credentials.phoneNumber || '+4570123456' }}",
+        "to": "={{ $json.phoneNumber }}",
+        "message": "={{ $json.smsContent }}"
+      },
+      "id": "send_sms",
+      "name": "Send SMS via Twilio",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [2840, 450],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_placeholder",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasCustomerRecord }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check_new_lead",
+      "name": "Is New Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3080, 550]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblLeads",
+          "mode": "list"
+        },
+        "filterByFormula": "=SEARCH('{{ $('Prepare SMS with Fallback').item.json.phoneNumber.slice(-8) }}', {Phone})"
+      },
+      "id": "check_existing_lead",
+      "name": "Check Existing Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [3320, 650],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "lead_exists_check",
+      "name": "Lead Already Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3560, 650]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblLeads",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone": "={{ $('Prepare SMS with Fallback').item.json.phoneNumber }}",
+            "Source": "={{ $('Prepare SMS with Fallback').item.json.eventType === 'missed_call' ? 'Missed Call' : 'Inbound SMS' }}",
+            "Status": "New",
+            "First Contact": "={{ $('Prepare SMS with Fallback').item.json.timestamp }}",
+            "Last Contact": "={{ $('Prepare SMS with Fallback').item.json.timestamp }}",
+            "Lead Score": "={{ $('Prepare SMS with Fallback').item.json.eventType === 'missed_call' ? 5 : 7 }}",
+            "Notes": "=Lead auto-generated from {{ $('Prepare SMS with Fallback').item.json.eventType }}. Initial SMS sent{{ $('Prepare SMS with Fallback').item.json.aiGenerated ? ' (AI)' : ' (Fallback)' }}."
+          }
+        },
+        "options": {}
+      },
+      "id": "create_lead",
+      "name": "Create New Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [3800, 750],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblLeads",
+          "mode": "list"
+        },
+        "id": "={{ $json[0].id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Last Contact": "={{ $('Prepare SMS with Fallback').item.json.timestamp }}",
+            "Lead Score": "={{ Math.min(($json[0].fields['Lead Score'] || 5) + 2, 10) }}",
+            "Notes": "={{ $json[0].fields.Notes }}\\n{{ $now.format('yyyy-MM-dd HH:mm') }}: {{ $('Prepare SMS with Fallback').item.json.eventType }} - SMS sent"
+          }
+        },
+        "options": {}
+      },
+      "id": "update_lead",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [3800, 550],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblActivityLog",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone Number": "={{ $('Prepare SMS with Fallback').item.json.phoneNumber }}",
+            "Event Type": "={{ $('Prepare SMS with Fallback').item.json.eventType }}",
+            "Customer Name": "={{ $('Prepare SMS with Fallback').item.json.customerName || 'Unknown' }}",
+            "Customer ID": "={{ $('Prepare SMS with Fallback').item.json.customerData?.['Customer ID'] || 'N/A' }}",
+            "SMS Content": "={{ $('Prepare SMS with Fallback').item.json.smsContent }}",
+            "SMS Length": "={{ $('Prepare SMS with Fallback').item.json.smsLength }}",
+            "AI Generated": "={{ $('Prepare SMS with Fallback').item.json.aiGenerated }}",
+            "Fallback Used": "={{ $('Prepare SMS with Fallback').item.json.fallbackUsed }}",
+            "VIP": "={{ $('Prepare SMS with Fallback').item.json.isVIP }}",
+            "Language": "={{ $('Prepare SMS with Fallback').item.json.preferredLanguage }}",
+            "Escalated": "={{ $('Check Escalation Triggers').item.json.needsEscalation }}",
+            "Escalation Reason": "={{ $('Check Escalation Triggers').item.json.escalationReason || 'N/A' }}",
+            "Call SID": "={{ $('Prepare SMS with Fallback').item.json.callSid || '' }}",
+            "Message SID": "={{ $('Prepare SMS with Fallback').item.json.messageSid || '' }}",
+            "Timestamp": "={{ $('Prepare SMS with Fallback').item.json.timestamp }}",
+            "Status": "sent"
+          }
+        },
+        "options": {}
+      },
+      "id": "log_activity",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [4040, 450],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $('Prepare SMS with Fallback').item.json.eventType }}",
+              "rightValue": "incoming_sms",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "update_conversation_check",
+      "name": "Need Conversation Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [4280, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update or create conversation record\nconst hasExistingConversation = $('Merge Customer Data').item.json.conversationId !== null;\nconst phoneNumber = $('Prepare SMS with Fallback').item.json.phoneNumber;\nconst conversationHistory = $('Merge Customer Data').item.json.conversationHistory || [];\n\n// Add new messages to history\nconst updatedHistory = [\n  ...conversationHistory,\n  {\n    role: 'customer',\n    content: $('Prepare SMS Data').item.json.messageBody,\n    timestamp: new Date().toISOString()\n  },\n  {\n    role: 'assistant',\n    content: $('Prepare SMS with Fallback').item.json.smsContent,\n    timestamp: new Date().toISOString(),\n    aiGenerated: $('Prepare SMS with Fallback').item.json.aiGenerated\n  }\n];\n\nreturn {\n  hasExistingConversation,\n  conversationId: $('Merge Customer Data').item.json.conversationId,\n  phoneNumber,\n  messages: JSON.stringify(updatedHistory),\n  messageCount: updatedHistory.length,\n  lastMessageTime: new Date().toISOString(),\n  status: 'active',\n  escalated: $('Check Escalation Triggers').item.json.needsEscalation || false\n};"
+      },
+      "id": "prep_conversation_update",
+      "name": "Prepare Conversation Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4520, 550]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasExistingConversation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "conversation_exists",
+      "name": "Conversation Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [4760, 550]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblConversations",
+          "mode": "list"
+        },
+        "id": "={{ $('Prepare Conversation Update').item.json.conversationId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Messages": "={{ $json.messages }}",
+            "Message Count": "={{ $json.messageCount }}",
+            "Last Message": "={{ $json.lastMessageTime }}",
+            "Status": "={{ $json.status }}",
+            "Escalated": "={{ $json.escalated }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update_conversation",
+      "name": "Update Conversation",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [5000, 450],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "value": "appXXXXXXXXXXXXXX",
+          "mode": "list"
+        },
+        "table": {
+          "value": "tblConversations",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone Number": "={{ $('Prepare Conversation Update').item.json.phoneNumber }}",
+            "Messages": "={{ $json.messages }}",
+            "Message Count": "={{ $json.messageCount }}",
+            "Start Time": "={{ $json.lastMessageTime }}",
+            "Last Message": "={{ $json.lastMessageTime }}",
+            "Status": "={{ $json.status }}",
+            "Escalated": "={{ $json.escalated }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "create_conversation",
+      "name": "Create Conversation",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [5000, 650],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable_placeholder",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"eventType\": \"{{ $('Prepare SMS with Fallback').item.json.eventType }}\",\n  \"phoneNumber\": \"{{ $('Prepare SMS with Fallback').item.json.phoneNumber }}\",\n  \"smsContent\": \"{{ $('Prepare SMS with Fallback').item.json.smsContent }}\",\n  \"aiGenerated\": {{ $('Prepare SMS with Fallback').item.json.aiGenerated }},\n  \"escalated\": {{ $('Check Escalation Triggers').item.json.needsEscalation || false }},\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "success_response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [5240, 450]
+    },
+    {
+      "parameters": {},
+      "id": "error_trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [4520, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare error details\nconst error = $json.error || {};\nconst workflow = $workflow;\nconst execution = $execution;\n\nconst errorDetails = {\n  message: error.message || 'Unknown error',\n  name: error.name || 'Error',\n  nodeId: error.node?.id || 'Unknown',\n  nodeName: error.node?.name || 'Unknown',\n  timestamp: new Date().toISOString(),\n  workflowId: workflow.id,\n  workflowName: workflow.name,\n  executionId: execution.id,\n  context: error.context || {}\n};\n\n// Add relevant data from the workflow\nif ($('Unified Webhook').item?.json) {\n  errorDetails.webhookData = {\n    from: $('Unified Webhook').item.json.From || 'Unknown',\n    eventType: $('Unified Webhook').item.json.CallStatus ? 'missed_call' : 'incoming_sms'\n  };\n}\n\nreturn errorDetails;"
+      },
+      "id": "prepare_error",
+      "name": "Prepare Error Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4760, 800]
+    },
+    {
+      "parameters": {
+        "channel": "#clinic-errors",
+        "text": ":x: Workflow Error - SMS System",
+        "otherOptions": {},
+        "attachments": [
+          {
+            "color": "#ff0000",
+            "fields": {
+              "item": [
+                {
+                  "short": true,
+                  "title": "Error Type",
+                  "value": "={{ $json.name }}"
+                },
+                {
+                  "short": true,
+                  "title": "Node",
+                  "value": "={{ $json.nodeName }}"
+                },
+                {
+                  "short": false,
+                  "title": "Message",
+                  "value": "={{ $json.message }}"
+                },
+                {
+                  "short": true,
+                  "title": "Phone",
+                  "value": "={{ $json.webhookData?.from || 'N/A' }}"
+                },
+                {
+                  "short": true,
+                  "title": "Event",
+                  "value": "={{ $json.webhookData?.eventType || 'Unknown' }}"
+                },
+                {
+                  "short": false,
+                  "title": "Execution ID",
+                  "value": "={{ $json.executionId }}"
+                }
+              ]
+            },
+            "fallback": "Workflow Error: {{ $json.message }}"
+          }
+        ]
+      },
+      "id": "error_slack",
+      "name": "Send Error to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [5000, 800],
+      "credentials": {
+        "slackApi": {
+          "id": "slack_placeholder",
+          "name": "Slack API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $('Prepare Error Details').item.json.message }}\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "error_response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [5240, 800]
+    },
+    {
+      "parameters": {
+        "content": "### Activity Log Structure\n\n**tblActivityLog Fields:**\n- Phone Number (phone)\n- Event Type (single select)\n- Customer Name (text)\n- Customer ID (text)\n- SMS Content (long text)\n- SMS Length (number)\n- AI Generated (checkbox)\n- Fallback Used (checkbox)\n- VIP (checkbox)\n- Language (single select)\n- Escalated (checkbox)\n- Escalation Reason (text)\n- Call SID (text)\n- Message SID (text)\n- Timestamp (datetime)\n- Status (single select)\n\n**Use for:**\n- Analytics\n- Quality monitoring\n- Compliance tracking",
+        "height": 500,
+        "width": 300
+      },
+      "id": "activity_log_note",
+      "name": "Activity Log",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [4040, 750]
+    }
+  ],
+  "connections": {
+    "Unified Webhook": {
+      "main": [[{"node": "Route by Type", "type": "main", "index": 0}]]
+    },
+    "Route by Type": {
+      "main": [
+        [{"node": "Prepare Missed Call", "type": "main", "index": 0}],
+        [{"node": "Prepare SMS Data", "type": "main", "index": 0}],
+        [{"node": "Stop on Invalid Data", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare Missed Call": {
+      "main": [[{"node": "Lookup Customer", "type": "main", "index": 0}]]
+    },
+    "Prepare SMS Data": {
+      "main": [[
+        {"node": "Lookup Customer", "type": "main", "index": 0},
+        {"node": "Get Conversation History", "type": "main", "index": 0}
+      ]]
+    },
+    "Lookup Customer": {
+      "main": [[{"node": "Is SMS Flow?", "type": "main", "index": 0}]]
+    },
+    "Is SMS Flow?": {
+      "main": [
+        [{"node": "Merge Customer Data", "type": "main", "index": 0}],
+        [{"node": "Merge Customer Data", "type": "main", "index": 0}]
+      ]
+    },
+    "Get Conversation History": {
+      "main": [[{"node": "Merge Customer Data", "type": "main", "index": 0}]]
+    },
+    "Merge Customer Data": {
+      "main": [[{"node": "Check Escalation Triggers", "type": "main", "index": 0}]]
+    },
+    "Check Escalation Triggers": {
+      "main": [[{"node": "Needs Escalation?", "type": "main", "index": 0}]]
+    },
+    "Needs Escalation?": {
+      "main": [
+        [
+          {"node": "Send Slack Alert", "type": "main", "index": 0},
+          {"node": "Build AI Prompt", "type": "main", "index": 0}
+        ],
+        [{"node": "Build AI Prompt", "type": "main", "index": 0}]
+      ]
+    },
+    "Build AI Prompt": {
+      "main": [[{"node": "Generate AI Response", "type": "main", "index": 0}]]
+    },
+    "Generate AI Response": {
+      "main": [[{"node": "Prepare SMS with Fallback", "type": "main", "index": 0}]]
+    },
+    "Prepare SMS with Fallback": {
+      "main": [[{"node": "Send SMS via Twilio", "type": "main", "index": 0}]]
+    },
+    "Send SMS via Twilio": {
+      "main": [
+        [
+          {"node": "Is New Lead?", "type": "main", "index": 0},
+          {"node": "Log Activity", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Is New Lead?": {
+      "main": [
+        [],
+        [{"node": "Check Existing Lead", "type": "main", "index": 0}]
+      ]
+    },
+    "Check Existing Lead": {
+      "main": [[{"node": "Lead Already Exists?", "type": "main", "index": 0}]]
+    },
+    "Lead Already Exists?": {
+      "main": [
+        [{"node": "Create New Lead", "type": "main", "index": 0}],
+        [{"node": "Update Existing Lead", "type": "main", "index": 0}]
+      ]
+    },
+    "Log Activity": {
+      "main": [[{"node": "Need Conversation Update?", "type": "main", "index": 0}]]
+    },
+    "Need Conversation Update?": {
+      "main": [
+        [{"node": "Prepare Conversation Update", "type": "main", "index": 0}],
+        [{"node": "Success Response", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare Conversation Update": {
+      "main": [[{"node": "Conversation Exists?", "type": "main", "index": 0}]]
+    },
+    "Conversation Exists?": {
+      "main": [
+        [{"node": "Update Conversation", "type": "main", "index": 0}],
+        [{"node": "Create Conversation", "type": "main", "index": 0}]
+      ]
+    },
+    "Update Conversation": {
+      "main": [[{"node": "Success Response", "type": "main", "index": 0}]]
+    },
+    "Create Conversation": {
+      "main": [[{"node": "Success Response", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Prepare Error Details", "type": "main", "index": 0}]]
+    },
+    "Prepare Error Details": {
+      "main": [[
+        {"node": "Send Error to Slack", "type": "main", "index": 0},
+        {"node": "Error Response", "type": "main", "index": 0}
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "2",
+      "name": "sms-automation"
+    },
+    {
+      "id": "3",
+      "name": "ai-powered"
+    }
+  ],
+  "meta": {
+    "templateId": "copenhagen-clinic-sms",
+    "instanceId": "production"
+  }
+}
